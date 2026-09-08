@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.wendy.park-morning</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/wendy/work/park-morning/ops/refresh-morning.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>40</integer></dict>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/wendy/work/park-morning</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/wendy</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <key>StandardOutPath</key><string>/Users/wendy/work/park-morning/ops/refresh-morning.launchd.log</string>
+  <key>StandardErrorPath</key><string>/Users/wendy/work/park-morning/ops/refresh-morning.launchd.log</string>
+  <key>ProcessType</key><string>Background</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>

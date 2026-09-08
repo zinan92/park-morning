@@ -1,0 +1,34 @@
+# park-morning
+
+> 当前快照。完成推进或 Good Night 结算时更新；历史留在 `daily/` 与 `decision-log.md`。
+
+## 要去哪里
+
+Park 每天早上真正会读的那一页：三份日报合成一页 HTML，一条飞书，读者只有一个入口。
+
+## 现在在哪里（2026-09-08）
+
+- 代码从 `park-ai-intel/scripts/build-morning.py`（1037 行单文件）搬到本仓，拆成
+  `morning/` 七个模块。搬迁前后用同一天的输入构建，产物逐字节相同（685,017 字节）。
+- 测试 14 passed，比搬迁前多 3 个（财经运维段剥离、vault 存档、上游恢复才补发飞书）。
+- launchd `com.wendy.park-morning` 09:00 与 09:40 各跑一次，指向本仓
+  `ops/refresh-morning.sh`；构建产物写进 `park-ai-intel/public/daily` 并由该仓库部署。
+- 三条上游的飞书推送已全部关停：AI 日报改跑 `push-digest.sh`；财经加
+  `PARK_INTEL_SKIP_FEISHU=1`；K 线加 `--no-feishu`（equity-research PR #1064）。
+- 已发布两期：2026-09-07（首期，两栏缺失）、2026-09-08（三栏全绿，v4 版式）。
+
+## 下一步
+
+1. 连续 30 期三栏全绿，零人工介入。当前连续 1 期。
+2. 每期 HTML 约 700KB 提交进站点仓库，一年约 250MB。到 30 期时决定是否改为
+   Cloudflare Pages 独立托管，只把 `status/*.json` 留在 git 里。
+3. Park 手写判断目前需要在 vault 里建文件；观察实际使用频率后再决定要不要页面入口。
+4. 盘中数据（4 小时、30 分钟）依赖 Human K-line Review 的 8932 端口；确认开盘后
+   是否跟得上，跟不上属于 datafeed 的问题。
+
+## Appendix（历史沉淀）
+
+- 2026-09-07 首期上线（PR park-ai-intel#93）。当天三条上游在各自时间点全部失败，
+  根因是 DeepSeek 余额为 0，Codex 兜底在三条线上都是第一次真实跑。
+- 2026-09-08 v2 模型层兜底、v3 K 线压缩与交互图、v4 三栏阅读版式，
+  分别为 park-ai-intel PR #94 #96 #97 #98。

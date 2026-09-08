@@ -1,0 +1,31 @@
+# 上游合同 · AI 日报
+
+| | |
+|---|---|
+| 产出方 | [zinan92/daily-newsletter](https://github.com/zinan92/daily-newsletter) |
+| 本机检出 | `~/work/input-to-park` |
+| 定时 | launchd `com.wendy.parkio-push` 08:30（`push-digest.sh`，只生成不推送） |
+| 交付路径 | `~/park-hands/006_ai daily newsletter/YY-MM-DD.md` |
+| 截止时间 | 09:00（晨报第一次运行）。实测落盘时间 08:37–08:50 |
+
+## 晨报读什么
+
+- 去掉第一个 `# ` 标题，其余 Markdown 原样渲染。
+- 摘要行统计：`^- \*\*` 的条数，显示为「N 条」。
+- 「今天先看」取第一条深读标题 `### [标题](链接)`，没有深读时取第一条快讯标题。
+
+## 晨报不读什么
+
+这份日报目前没有任何运维段落，保持这样。若将来加入源状态、生成回执、覆盖窗口一类内容，
+必须同时在 `morning/sources.py` 的 `load_ai` 里剥掉，否则会出现在读者面前。
+
+## 缺失时的行为
+
+栏目显示「今日不可用 · 未找到 26-09-08.md」，不回填前一期。`--alert` 会开一张 issue。
+
+## 已知失败模式
+
+- DeepSeek 402 后 Codex 兜底偶发输出重复 item card id，被自家 schema 拦下，整轮失败。
+  重跑：`cd ~/work/input-to-park && ./push-feishu-digest.sh`
+- 站点发布脚本（`park-ai-intel/scripts/refresh-newsletter.sh`）与晨报无关，它只更新
+  `/newsletter` 归档页。
