@@ -10,7 +10,8 @@ Park 每天早上真正会读的那一页：三份日报合成一页 HTML，一�
 
 - 代码从 `park-ai-intel/scripts/build-morning.py`（1037 行单文件）搬到本仓，拆成
   `morning/` 七个模块。搬迁前后用同一天的输入构建，产物逐字节相同（685,017 字节）。
-- 测试 14 passed，比搬迁前多 3 个（财经运维段剥离、vault 存档、上游恢复才补发飞书）。
+- 测试 20 passed（搬迁前 11）。新增：财经运维段剥离、vault 存档、只有上游恢复才补发飞书、
+  页面无实质变化时不重写、盘中滞后判断、自愈的四条规则。
 - launchd `com.wendy.park-morning` 09:00 与 09:40 各跑一次，指向本仓
   `ops/refresh-morning.sh`；构建产物写进 `park-ai-intel/public/daily` 并由该仓库部署。
 - 三条上游的飞书推送已全部关停：AI 日报改跑 `push-digest.sh`；财经加
@@ -28,8 +29,9 @@ Park 每天早上真正会读的那一页：三份日报合成一页 HTML，一�
 2. 每期 HTML 约 700KB 提交进站点仓库，一年约 250MB。到 30 期时决定是否改为
    Cloudflare Pages 独立托管，只把 `status/*.json` 留在 git 里。
 3. Park 手写判断目前需要在 vault 里建文件；观察实际使用频率后再决定要不要页面入口。
-4. 盘中数据（4 小时、30 分钟）依赖 Human K-line Review 的 8932 端口；确认开盘后
-   是否跟得上，跟不上属于 datafeed 的问题。
+4. 盘中数据已查清，不是故障：四个美股 ETF 的 4 小时是 Yahoo 不提供，A 股与日韩指数
+   没有盘中源，实测表格在 `contracts/kline-daily.md`。上游的 stale 标记按墙上时钟判断，
+   假日后会误报，已改为与同资产日线比对。
 
 ## Appendix（历史沉淀）
 
