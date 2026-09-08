@@ -4,13 +4,33 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from . import config, delivery, market, render, sources
 from . import llm as llm_mod
 from .config import BJT
 from .text import bjt_today
+
+
+GENERATED_STAMP = re.compile(r"生成 \d\d:\d\d")
+
+
+def write_if_changed(path: Path, html: str) -> bool:
+    """Write only when the page really differs.
+
+    Every run stamps a new generation time, so a byte comparison would make
+    the 09:00 and 09:40 runs each commit the same ~700KB page to the site
+    repository. Compare with the stamp removed instead.
+    """
+    if path.exists():
+        strip = lambda text: GENERATED_STAMP.sub("", text)  # noqa: E731
+        if strip(path.read_text(encoding="utf-8")) == strip(html):
+            return False
+    path.write_text(html, encoding="utf-8")
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     config.OUT_DIR.mkdir(parents=True, exist_ok=True)
     (config.OUT_DIR / "status").mkdir(exist_ok=True)
-    (config.OUT_DIR / f"{date}.html").write_text(page, encoding="utf-8")
+    written = write_if_changed(config.OUT_DIR / f"{date}.html", page)
+    status["rewritten"] = written
     (config.OUT_DIR / "status" / f"{date}.json").write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         config.VAULT_HTML_DIR.mkdir(parents=True, exist_ok=True)
