@@ -19,13 +19,20 @@
 这份日报目前没有任何运维段落，保持这样。若将来加入源状态、生成回执、覆盖窗口一类内容，
 必须同时在 `morning/sources.py` 的 `load_ai` 里剥掉，否则会出现在读者面前。
 
+## 模型
+
+`PARKIO_LLM_PROVIDER=codex`（launchd 环境变量），`PARKIO_LLM_FALLBACK_PROVIDER=deepseek`。
+Codex 是主力，DeepSeek 只在 Codex 失败时才被调用——余额为 0 时它会直接失败，
+一旦充值就自动成为真正的备份，不需要再改配置。
+
 ## 缺失时的行为
 
 栏目显示「今日不可用 · 未找到 26-09-08.md」，不回填前一期。`--alert` 会开一张 issue。
 
 ## 已知失败模式
 
-- DeepSeek 402 后 Codex 兜底偶发输出重复 item card id，被自家 schema 拦下，整轮失败。
-  重跑：`cd ~/work/input-to-park && ./push-feishu-digest.sh`
+- Codex 偶发输出重复 item card id，被自家 schema 拦下，整轮失败（2026-09-08 出现一次，
+  重跑即过）。自愈会自动重跑；手动重跑用 `cd ~/work/input-to-park && ./push-digest.sh`
+  （不要用 `push-feishu-digest.sh`，那会再推一条飞书）。
 - 站点发布脚本（`park-ai-intel/scripts/refresh-newsletter.sh`）与晨报无关，它只更新
   `/newsletter` 归档页。

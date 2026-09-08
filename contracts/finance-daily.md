@@ -25,6 +25,11 @@ front matter 里取 `article_count` 显示为「N 篇」，「今天先看」取
 
 新增运维段落时，把标题加进 `FINANCE_OPS_HEADINGS` 即可。
 
+## 模型
+
+顺序由 `_llm_order()` 决定，默认 `codex, deepseek`，`PARK_INTEL_LLM_PRIMARY=deepseek` 可切回。
+以前是 DeepSeek 优先，每次先换一个 HTTP 402 才走 Codex。
+
 ## 缺失时的行为
 
 栏目显示「今日不可用 · 未找到 …-finance-daily-newsletter.md」，不回填。

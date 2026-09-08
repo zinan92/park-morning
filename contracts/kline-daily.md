@@ -24,6 +24,12 @@
 - `**市场含义**`：每天逐字重复，不是当日信息
 - `**赔率**：赔率尚未形成`：16 个资产全都一样时没有信息量
 
+## 模型
+
+launchd 传 `--primary-provider codex`：不再对每个资产先试一次 DeepSeek。
+代价是这条线目前只有 Codex 一个 provider（Codex 自身会重试；资产 1 次、thesis 2 次）。
+DeepSeek 充值后把 flag 改回 `deepseek` 即可恢复两个 provider。
+
 ## 缺失时的行为
 
 晨报读到 `-unavailable.md` 时，改用日线统计让模型自生成 16 个宏观资产的分析，

@@ -28,7 +28,9 @@ HEALERS: dict[str, dict] = {
         "cwd": f"{HOME}/work/input-to-park",
         "busy": "push-digest.sh|build-digest.py|summarize.py",
         "timeout": 900,
-        "env": {},
+        # launchd carries these; a manual heal must not silently fall back to
+        # the provider with no balance.
+        "env": {"PARKIO_LLM_PROVIDER": "codex", "PARKIO_LLM_FALLBACK_PROVIDER": "deepseek"},
     },
     "finance": {
         "label": "财经日报",

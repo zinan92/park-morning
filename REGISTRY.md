@@ -22,6 +22,10 @@ Park 每天早上真正会读的那一页：三份日报合成一页 HTML，一�
   AI 13/14、财经 12/14、K 线 10/14，三条同时到齐约 57%；每次人工重跑都一次成功，
   所以把这一步自动化。
 
+- 三条上游全部改为 Codex CLI 优先：AI 日报 `PARKIO_LLM_PROVIDER=codex`（备份 deepseek）、
+  财经 `_llm_order()` 默认 codex（intel PR #127）、K 线 `--primary-provider codex`
+  （equity-research PR #1069）。此前每次运行都先花一次请求换一个 HTTP 402。
+
 ## 下一步
 
 1. 连续 30 期三栏全绿，零人工介入。当前连续 1 期，且今天是人工重跑救回来的。
