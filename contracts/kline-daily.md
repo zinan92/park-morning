@@ -42,3 +42,24 @@
 日线以外的 4 小时、30 分钟来自 Human K-line Review：`http://127.0.0.1:8932/api/overview`，
 launchd `com.park.human-kline-review`。晨报每天缓存一次为 `{date}-overview.json`。
 拿不到时只显示日线，不放占位。
+
+### 各资产实际能拿到哪些周期（2026-09-08 实测）
+
+| 资产 | 日线 | 4 小时 | 30 分钟 |
+|---|---|---|---|
+| VIX、BTC、ETH、HYPE | 有 | 有 | 有 |
+| GOLD、SILVER、WTI | 有 | 有 | 有 |
+| DXY、SPX、NDX、SCHD | 有 | **没有** | 有 |
+| N225、KOSPI | 有 | 没有 | 没有 |
+| SHCOMP、STAR50、DIVIDEND | 有（来自 kline.db） | 没有 | 没有 |
+
+四个美股 ETF 没有 4 小时不是故障：datafeed 返回
+`timeframe_not_supported · Source yahoo_finance does not serve SPY at 4h`，
+是数据源本身不提供。A 股与日韩指数没有盘中源。这些情况下晨报只显示有的周期。
+
+### 不要用上游的 stale 标记判断新鲜度
+
+Human K-line Review 按墙上时钟判断 `status: stale`。美国假日后的早上，
+盘中序列合法地停在上一个交易日，会被它标成 stale。晨报改为把盘中序列的
+最后一根与**同一资产自己的日线**比较，落后超过 `market.STALE_AFTER_DAYS` 天才提示。
+2026-09-07 是美国劳动节，当天早上四个商品的 4 小时停在 09-04，属于正常。

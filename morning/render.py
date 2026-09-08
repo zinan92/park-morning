@@ -7,7 +7,7 @@ from datetime import datetime
 
 from . import config
 from .config import BJT, KLINE_SUMMARY_ORDER, MACRO_ORDER, TF_LABELS, TF_ORDER
-from .market import should_expand, svg_candles
+from .market import STALE_AFTER_DAYS, series_lag_days, should_expand, svg_candles
 from .sources import Section
 from .text import md_to_html
 
@@ -47,10 +47,12 @@ def render_macro(entry: dict | None, analysis: dict | None, note: str, overview_
     stats = entry["stats"] if entry else {}
     tfs = (overview_asset or {}).get("timeframes", {})
     charts = []
+    reference = (tfs.get("daily") or {}).get("as_of") or stats.get("as_of", "")
     for tf in TF_ORDER:
         info = tfs.get(tf)
         if info and info.get("bars"):
-            stale = "（未更新）" if info.get("status") == "stale" else ""
+            lag = series_lag_days(info.get("as_of", ""), reference)
+            stale = f"（落后 {lag} 天）" if lag is not None and lag > STALE_AFTER_DAYS else ""
             charts.append(f'<figure class="kc"><figcaption>{TF_LABELS[tf]}<small>{html.escape(info.get("as_of", ""))}{stale}</small></figcaption><div class="chart" data-key="{html.escape(key)}" data-tf="{tf}"></div></figure>')
     if not charts and entry and entry["candles"]:
         charts.append(f'<figure class="kc"><figcaption>日线<small>{stats.get("as_of", "")}</small></figcaption>{svg_candles(entry["candles"], 420, 150, 120)}</figure>')

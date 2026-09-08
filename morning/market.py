@@ -184,3 +184,25 @@ def build_universe(manifest: list[dict], db: Path) -> tuple[dict[str, dict], lis
         else:
             stocks.append(entry)
     return macros, stocks
+
+def series_lag_days(as_of: str, reference: str) -> int | None:
+    """How many days an intraday series trails the asset's own daily series.
+
+    Wall-clock freshness lies across weekends and holidays: on the Tuesday
+    after Labor Day a US intraday series legitimately ends the previous
+    Friday. Comparing against the same asset's daily bar instead only flags a
+    series that has genuinely stopped updating.
+    """
+    from datetime import date
+
+    def parse(text: str) -> date | None:
+        try:
+            return date.fromisoformat((text or "")[:10])
+        except ValueError:
+            return None
+
+    a, b = parse(as_of), parse(reference)
+    return None if not a or not b else (b - a).days
+
+
+STALE_AFTER_DAYS = 4
