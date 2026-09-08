@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import config, delivery, market, render, sources
+from . import config, delivery, heal as heal_mod, market, render, sources
 from . import llm as llm_mod
 from .config import BJT
 from .text import bjt_today
@@ -43,12 +43,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--batch", type=int, default=10, help="stocks per LLM call")
     ap.add_argument("--send-feishu", action="store_true")
     ap.add_argument("--alert", action="store_true", help="open a GitHub issue when a section is unavailable")
+    ap.add_argument("--heal", action="store_true", help="re-run an upstream that produced nothing today, once")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     date = args.date
 
     ai, fin = sources.load_ai(date), sources.load_finance(date)
     kl, kline = sources.load_kline(date)
+    healed: dict[str, str] = {}
+    if args.heal and not args.dry_run:
+        missing = [s.key for s in (ai, fin, kl) if s.status != "ok"]
+        healed = heal_mod.heal(missing, date)
+        for key, outcome in healed.items():
+            print(f"heal {key}: {outcome}")
+        if healed:
+            heal_mod.wait_for(list(healed))
+            ai, fin = sources.load_ai(date), sources.load_finance(date)
+            kl, kline = sources.load_kline(date)
     notes = sources.load_park_notes(date)
     manifest = market.load_manifest()
     macros, stocks = market.build_universe(manifest, config.KLINE_DB)
@@ -72,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         "generated_at": datetime.now(BJT).isoformat(timespec="seconds"),
         "sections": {s.key: {"status": s.status, "reason": s.reason, **s.meta} for s in (ai, fin, kl)},
         "kline": {"macro_assets": len(macros), "stocks": len(stocks), "model_notes": sum(1 for v in model_notes.values() if v), "rule_notes": fallback_count, "park_notes": len(notes), "macro_fallback": fallback_provider, "condensed": len(condensed), "condensed_provider": condensed_provider, "overview_assets": len(overview.get("assets", {}))},
+        "healed": healed,
         "llm": {"active": llm.active if llm else "none", "calls": llm.calls if llm else {}, "errors": llm.errors[:10] if llm else []},
     }
     if args.dry_run:

@@ -17,7 +17,11 @@ PY=/usr/local/bin/python3
   fi
 
   cd "$REPO" || exit 1
-  "$PY" build-morning.py --send-feishu --alert || { echo "✗ build failed"; exit 1; }
+  # The 09:00 run delivers what the upstreams produced. The later run also
+  # re-runs an upstream that produced nothing, once, before rebuilding.
+  HEAL=""
+  [ "$(date '+%H%M')" -ge 0930 ] && HEAL="--heal"
+  "$PY" build-morning.py --send-feishu --alert $HEAL || { echo "✗ build failed"; exit 1; }
 
   cd "$SITE" || exit 1
   # Bring the publishing branch up to date first, so the push is a fast-forward.
