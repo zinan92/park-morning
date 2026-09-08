@@ -28,7 +28,7 @@ PY=/usr/local/bin/python3
     git add "$OUT" \
       && git commit -q -m "chore: morning brief $(date '+%Y-%m-%d')" -- "$OUT" \
       && git push -q origin HEAD:main \
-      && echo "✓ published — Vercel auto-deploys" \
+      && echo "✓ published: $(git show --stat --format= HEAD | tail -n +1 | head -3 | tr -s ' ' | tr '\n' ';')" \
       || echo "✗ commit/push failed"
   fi
   echo "=== done ==="
