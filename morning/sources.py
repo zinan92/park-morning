@@ -5,6 +5,7 @@ Contracts for each upstream live in ../contracts/.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from dataclasses import dataclass, field
 
 from . import config
@@ -113,9 +114,26 @@ def parse_kline_md(text: str) -> dict:
     return {"summary_md": summary_md, "summary": summary, "assets": assets, "treasuries": treasuries, "conclusion": conclusion}
 
 
+def kline_path(date: str) -> Path:
+    """Newest of today's K-line files.
+
+    A rerun of the upstream never overwrites; it writes
+    `{date}-kline-daily-newsletter-<hash>.md` next to the first edition. When
+    the first edition was built on stale bars (2026-09-09: the seed had not
+    run), the rerun is the one the brief must read.
+    """
+    candidates = [
+        p for p in config.KL_DIR.glob(f"{date}-kline-daily-newsletter*.md")
+        if not p.name.endswith("-unavailable.md")
+    ]
+    if not candidates:
+        return config.KL_DIR / f"{date}-kline-daily-newsletter.md"
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
 def load_kline(date: str) -> tuple[Section, dict]:
     sec = Section("kline", "K 线日报")
-    path = config.KL_DIR / f"{date}-kline-daily-newsletter.md"
+    path = kline_path(date)
     parsed = {"summary_md": "", "summary": {}, "assets": [], "treasuries": [], "conclusion": ""}
     if path.exists():
         parsed = parse_kline_md(path.read_text(encoding="utf-8"))

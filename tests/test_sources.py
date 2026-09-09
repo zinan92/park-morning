@@ -59,3 +59,20 @@ def test_missing_inputs_become_unavailable(tmp_path, monkeypatch):
     page = render.render_page("2026-09-07", ai, sources.load_finance("2026-09-07"), kl, parsed, {}, [], {}, {}, {})
     assert page.count("今日不可用") >= 3
     assert "不用上一期冒充今天" in page
+
+
+def test_kline_rerun_edition_wins_over_first_edition(tmp_path, monkeypatch):
+    import os
+    monkeypatch.setattr(config, "KL_DIR", tmp_path)
+    first = tmp_path / "2026-09-09-kline-daily-newsletter.md"
+    rerun = tmp_path / "2026-09-09-kline-daily-newsletter-e06941fbad81.md"
+    first.write_text(KLINE_MD, encoding="utf-8")
+    rerun.write_text(KLINE_MD, encoding="utf-8")
+    os.utime(first, (1_000_000, 1_000_000))
+    os.utime(rerun, (2_000_000, 2_000_000))
+    assert sources.kline_path("2026-09-09") == rerun
+    kl, _ = sources.load_kline("2026-09-09")
+    assert kl.status == "ok" and kl.meta["path"] == str(rerun)
+    # the unavailable marker never counts as an edition
+    (tmp_path / "2026-09-10-kline-daily-newsletter-unavailable.md").write_text("x", encoding="utf-8")
+    assert sources.kline_path("2026-09-10").name == "2026-09-10-kline-daily-newsletter.md"
