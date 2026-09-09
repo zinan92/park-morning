@@ -5,7 +5,7 @@
 | 产出方 | [zinan92/equity-research](https://github.com/zinan92/equity-research) |
 | 运行时检出 | `~/Library/Application Support/ParkKlineDaily/app`（不在 `~/work`） |
 | 定时 | launchd `com.park.market-regime.kline-newsletter` 08:20，带 `--no-feishu` |
-| 交付路径 | `~/park-hands/007_kline daily newsletter/YYYY-MM-DD-kline-daily-newsletter.md` |
+| 交付路径 | `~/park-hands/007_kline daily newsletter/YYYY-MM-DD-kline-daily-newsletter.md`；重跑不覆盖，写 `…-newsletter-<hash>.md`，晨报取当天最新的一份 |
 | 失败时写 | 同目录 `…-kline-daily-newsletter-unavailable.md`，含运行阶段与失败原因 |
 | 截止时间 | 09:00 |
 
@@ -42,6 +42,15 @@ DeepSeek 充值后把 flag 改回 `deepseek` 即可恢复两个 provider。
 | `OSError:[Errno 11] Resource deadlock avoided` | macOS flock 偶发 EDEADLK | 已修（equity-research PR #1055），重跑即可 |
 | `DailySnapshotError:chromium_unavailable` | Playwright chromium 瞬时起不来 | `launchctl kickstart gui/$(id -u)/com.park.market-regime.kline-newsletter` |
 | 全线 DeepSeek 402 | 账户余额为 0 | 上游自身有 Codex 兜底；充值是根治 |
+| 图表与「观察时点」停在几天前，但上游正常产出 | 08:15 的 datafeed 种子没跑：`sync_watchlist_registry` 查 GitHub ref 时匿名额度（60/h，按 IP）用尽返回 403，`&&` 后面的种子被跳过，kline.db 整天没有新柱 | 已修（datafeed PR #181）：查询带 token（`GITHUB_TOKEN_FILE`），查询失败时沿用旧清单继续种子。手动补：`launchctl kickstart gui/$(id -u)/com.wendy.datafeed.watchlist-daily`，再依次刷新 8932（`/api/overview?refresh=true`）、kickstart K 线日报、删 `{date}-overview.json` `{date}-macro-condensed.json` `{date}-stock-notes.json`、重跑晨报 |
+
+## 上游的上游：datafeed 日线种子
+
+K 线日报、8932 盘中总览和晨报里的日线全部来自 `~/park-data/market/kline.db`，
+由 launchd `com.wendy.datafeed.watchlist-daily` 08:15 写入（107 个 instrument）。
+它是整条 K 线链的第一环，回执在 `~/park-data/market/watchlist-latest.json`
+（`instrument_status_counts`）和 `watchlist-registry-receipt.json`（`status`）。
+晨报判断新鲜度最省事的办法：`sqlite3 ~/park-data/market/kline.db "select max(timestamp) from mvp_candles where instrument_id='WATCH.CROSS.SPX' and timeframe='1d'"`。
 
 ## 盘中数据（另一条源）
 

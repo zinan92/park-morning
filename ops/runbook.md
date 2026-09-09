@@ -5,7 +5,7 @@
 | 时间 | 发生什么 |
 |---|---|
 | 08:00 | 财经日报写入 vault |
-| 08:15 | datafeed 把 107 个 instrument 的日线写入 `~/park-data/market/kline.db` |
+| 08:15 | datafeed 把 107 个 instrument 的日线写入 `~/park-data/market/kline.db`（K 线链第一环；没跑的话下面三步都拿旧柱） |
 | 08:20 | K 线日报写入 vault（`--no-feishu`） |
 | 08:30 | AI 日报写入 vault（只生成，不推送） |
 | 09:00 | 晨报第一次运行：合成、发布、一条飞书 |
@@ -35,6 +35,19 @@ cd ~/work/park-morning && ./build-morning.py --heal --send-feishu   # 重跑上�
 ```
 
 09:40 那次会自动做这件事，所以多数情况下不需要手动介入。
+
+## 早上打开发现 K 线图停在几天前（三栏都是绿的）
+
+多半是 08:15 的 datafeed 种子没跑。按顺序：
+
+```bash
+sqlite3 ~/park-data/market/kline.db "select max(timestamp) from mvp_candles where instrument_id='WATCH.CROSS.SPX' and timeframe='1d'"
+launchctl kickstart gui/$(id -u)/com.wendy.datafeed.watchlist-daily            # 补种子，约 8 分钟
+curl -s "http://127.0.0.1:8932/api/overview?refresh=true" >/dev/null           # 刷新盘中总览
+launchctl kickstart gui/$(id -u)/com.park.market-regime.kline-newsletter        # K 线日报重跑，写 -<hash>.md
+rm "$HOME/park-hands/007_kline daily newsletter/park-morning-cache/2026-09-09-"{overview,macro-condensed,stock-notes}.json
+/bin/bash ~/work/park-morning/ops/refresh-morning.sh
+```
 
 ## 常用命令
 
