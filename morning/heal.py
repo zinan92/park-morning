@@ -27,7 +27,9 @@ HEALERS: dict[str, dict] = {
         "cmd": ["/bin/bash", f"{HOME}/work/input-to-park/push-digest.sh"],
         "cwd": f"{HOME}/work/input-to-park",
         "busy": "push-digest.sh|build-digest.py|summarize.py",
-        "timeout": 900,
+        # Measured 2026-09-09: 16 minutes end to end at low reasoning effort.
+        # A 900s cap killed it 41 seconds before the last stage wrote its file.
+        "timeout": 2400,
         # launchd carries these; a manual heal must not silently fall back to
         # the provider with no balance.
         "env": {"PARKIO_LLM_PROVIDER": "codex", "PARKIO_LLM_FALLBACK_PROVIDER": "deepseek"},
@@ -38,7 +40,7 @@ HEALERS: dict[str, dict] = {
                 "scripts/publish_finance_daily_newsletter.py"],
         "cwd": f"{HOME}/work/trading-co/park-intel-production",
         "busy": "publish_finance_daily_newsletter",
-        "timeout": 900,
+        "timeout": 1200,
         "env": {"PYTHONPATH": ".", "PARK_INTEL_SKIP_FEISHU": "1"},
     },
     "kline": {
