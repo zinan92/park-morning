@@ -123,17 +123,36 @@ def should_expand(stats: dict, has_note: bool, threshold: float = 3.0) -> bool:
     return has_note or (chg is not None and abs(chg) >= threshold)
 
 
+def fetch_overview(url: str, refresh_timeout: int = 480) -> dict | None:
+    """Ask Human K-line Review to refresh, then read the bundle.
+
+    The review server only re-pulls when asked. On 2026-09-10 its bundle was
+    still the previous morning's (cutoff 09-09 02:00Z) and every intraday chart
+    ran a day behind kline.db. A refresh takes a few minutes; if it times out
+    the plain read is still better than nothing.
+    """
+    for target, timeout in ((url + ("&" if "?" in url else "?") + "refresh=true", refresh_timeout), (url, 90)):
+        try:
+            with urllib.request.urlopen(target, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            sys.stderr.write(f"[overview] {target}: {exc}\n")
+    return None
+
+
+def candles_to_bars(candles: list[dict], limit: int = CHART_BARS) -> list[list]:
+    """kline.db candles → the compact [t,o,h,l,c,v] rows the page embeds."""
+    return [[c["t"], c["o"], c["h"], c["l"], c["c"], c.get("v") or 0] for c in candles[-limit:]]
+
+
 def load_review_overview(date: str, url: str = config.REVIEW_OVERVIEW_URL) -> dict:
     """Fetch the 16-asset daily/4h/30m candle bundle once per day and cache it."""
     config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path = config.CACHE_DIR / f"{date}-overview.json"
     if cache_path.exists():
         return json.loads(cache_path.read_text(encoding="utf-8"))
-    try:
-        with urllib.request.urlopen(url, timeout=90) as resp:
-            raw = json.loads(resp.read().decode())
-    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        sys.stderr.write(f"[overview] unavailable: {exc}\n")
+    raw = fetch_overview(url)
+    if raw is None:
         return {}
     compact = {"cutoff_at": raw.get("cutoff_at"), "assets": {}}
     for asset in raw.get("assets", []):
@@ -176,6 +195,7 @@ def build_universe(manifest: list[dict], db: Path) -> tuple[dict[str, dict], lis
             "symbol": inst.get("display_symbol") or iid.split(".")[-1],
             "asset_class": inst.get("asset_class"),
             "memberships": inst.get("metadata", {}).get("registry_memberships", []),
+            "market": inst.get("metadata", {}).get("registry_market") or iid.split(".")[1],
             "candles": load_candles(db, iid),
         }
         entry["stats"] = compute_stats(entry["candles"])
