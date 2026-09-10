@@ -75,7 +75,7 @@ touch ~/.park-morning.off                                 # 保留定时但跳�
 | `{date}-stock-notes.json` | 91 只个股的一句描述 | 重新调用模型，约 10 次 |
 | `{date}-macro-condensed.json` | 16 个宏观资产的压缩段落 | 重新调用模型，1 次 |
 | `{date}-macro-fallback.json` | 上游缺失时的自生成分析 | 同上 |
-| `{date}-overview.json` | 盘中 K 线数据 | 重新拉一次 8932 |
+| `{date}-overview.json` | 盘中 K 线数据（4h / 30m） | 先让 8932 刷新再拉一次，最多 8 分钟 |
 | `{date}-feishu.json` | 当天飞书回执与三栏状态 | 会重复发一条 |
 
 ## Codex CLI 的两个坑

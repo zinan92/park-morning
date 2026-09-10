@@ -52,11 +52,21 @@ K 线日报、8932 盘中总览和晨报里的日线全部来自 `~/park-data/ma
 （`instrument_status_counts`）和 `watchlist-registry-receipt.json`（`status`）。
 晨报判断新鲜度最省事的办法：`sqlite3 ~/park-data/market/kline.db "select max(timestamp) from mvp_candles where instrument_id='WATCH.CROSS.SPX' and timeframe='1d'"`。
 
+## 综合解释（今日结论）经常是占位句
+
+上游的「今日结论」由 thesis 步骤生成，校验极严（证据 ID、数字必须绑定、禁用词、限定词）。
+`--primary-provider codex` 之后只有 Codex 一个候选，输出没过校验就写占位句
+「本期综合解释尚未生成」，`## 来源与状态` 里会有一行「模型失败披露：…备用模型：validation_error」。
+2026-09-08、09-09 重跑、09-10 三次都是这样，09-09 08:28 那次成功。晨报把占位句原样显示为导语，
+不用旧结论冒充。
+
 ## 盘中数据（另一条源）
 
-日线以外的 4 小时、30 分钟来自 Human K-line Review：`http://127.0.0.1:8932/api/overview`，
-launchd `com.park.human-kline-review`。晨报每天缓存一次为 `{date}-overview.json`。
-拿不到时只显示日线，不放占位。
+**日线一律来自 kline.db**（08:15 写入，永远是最新的）；4 小时、30 分钟来自 Human K-line Review：
+`http://127.0.0.1:8932/api/overview`，launchd `com.park.human-kline-review`。
+这个服务只在被要求时才重新拉数据：2026-09-10 早上它的 bundle 还是前一天 02:00Z 的，
+所有盘中图落后一天。晨报从 v5 起先请求 `?refresh=true`（最多等 8 分钟），超时再读旧 bundle，
+每天缓存一次为 `{date}-overview.json`。拿不到时只显示日线，不放占位。
 
 ### 各资产实际能拿到哪些周期（2026-09-08 实测）
 
