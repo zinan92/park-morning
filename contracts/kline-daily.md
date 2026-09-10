@@ -52,13 +52,13 @@ K 线日报、8932 盘中总览和晨报里的日线全部来自 `~/park-data/ma
 （`instrument_status_counts`）和 `watchlist-registry-receipt.json`（`status`）。
 晨报判断新鲜度最省事的办法：`sqlite3 ~/park-data/market/kline.db "select max(timestamp) from mvp_candles where instrument_id='WATCH.CROSS.SPX' and timeframe='1d'"`。
 
-## 综合解释（今日结论）经常是占位句
+## 综合解释（今日结论）曾连续三期是占位句
 
-上游的「今日结论」由 thesis 步骤生成，校验极严（证据 ID、数字必须绑定、禁用词、限定词）。
-`--primary-provider codex` 之后只有 Codex 一个候选，输出没过校验就写占位句
-「本期综合解释尚未生成」，`## 来源与状态` 里会有一行「模型失败披露：…备用模型：validation_error」。
-2026-09-08、09-09 重跑、09-10 三次都是这样，09-09 08:28 那次成功。晨报把占位句原样显示为导语，
-不用旧结论冒充。
+2026-09-08、09-09 重跑、09-10 的「今日结论」都是「本期综合解释尚未生成」。两个根因，都在
+equity-research PR #1070 修掉：① thesis 请求构造器读 `analysis["output"]`，而落盘的单资产
+分析是扁平的，模型收到 19 个空资产；② Codex 默认推理档下这个请求要 13 分钟以上，运行时只给
+360 秒。现在所有 Codex 调用带 `model_reasoning_effort="low"`（`PARK_KLINE_CODEX_REASONING_EFFORT`
+可覆盖），实测 83 秒并通过校验。再看到占位句，先看 md 末尾「模型失败披露」那一行。
 
 ## 盘中数据（另一条源）
 
