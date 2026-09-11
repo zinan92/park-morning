@@ -20,7 +20,7 @@ def test_provider_order_and_availability(monkeypatch):
     monkeypatch.setattr(llm, "CODEX_BIN", Path("/bin/sh"))
     engine = llm.LLM("auto")
     assert engine.providers == ["codex"]
-    monkeypatch.setattr(llm, "codex_call", lambda messages, model, timeout=0: '{"WATCH.X": "20 日区间上沿，量能放大。"}')
+    monkeypatch.setattr(llm, "codex_call", lambda messages, model, timeout=0, **kw: '{"WATCH.X": "20 日区间上沿，量能放大。"}')
     text, provider = engine.complete([{"role": "user", "content": "x"}])
     assert provider == "codex" and "WATCH.X" in text and engine.calls["codex"] == 1
 
@@ -43,7 +43,7 @@ def test_annotate_stocks_batches_and_caches(tmp_path, monkeypatch, candles):
     stocks = [{"id": f"WATCH.S{i}", "name": f"s{i}", "symbol": f"S{i}", "stats": stats} for i in range(4)]
     seen = []
 
-    def fake_codex(messages, model, timeout=0):
+    def fake_codex(messages, model, timeout=0, **kw):
         ids = [s for s in ("WATCH.S0", "WATCH.S1", "WATCH.S2", "WATCH.S3") if s in messages[-1]["content"]]
         seen.append(len(ids))
         return "{" + ",".join(f'"{i}": "{i} 在 20 日区间中部。"' for i in ids) + "}"
@@ -65,7 +65,7 @@ def test_macro_fallback_builds_asset_blocks(tmp_path, monkeypatch, candles):
     macros = {"GOLD": {"name": "黄金", "symbol": "GOLD", "stats": stats}, "SPX": {"name": "标普", "symbol": "SPX", "stats": stats}}
     monkeypatch.setattr(
         llm, "codex_call",
-        lambda m, model, timeout=0: '{"conclusion": "等待 · 分化", "assets": {"GOLD": {"位置": "高位", "结构": "趋势偏强", "赔率": "未形成", "综合结论": "偏强"}}}',
+        lambda m, model, timeout=0, **kw: '{"conclusion": "等待 · 分化", "assets": {"GOLD": {"位置": "高位", "结构": "趋势偏强", "赔率": "未形成", "综合结论": "偏强"}}}',
     )
     assets, conclusion, provider = llm.macro_fallback(macros, "2026-09-08", llm.LLM("codex"))
     assert provider == "codex" and conclusion.startswith("等待")

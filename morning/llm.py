@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 import time
 import urllib.request
 from pathlib import Path
@@ -53,9 +54,32 @@ def deepseek_call(messages: list[dict], model: str, key: str, timeout: int = 60)
 
 
 CODEX_BIN = Path("/opt/homebrew/bin/codex")
+USAGE_LOG = Path.home() / "park-data" / "llm-usage" / "morning-brief.jsonl"
+_TOKENS_USED_RE = re.compile(r"tokens used\s*\n\s*([\d,]+)")
 
 
-def codex_call(messages: list[dict], model: str | None, timeout: int = 150) -> str:
+def _log_codex_usage(call: str, stderr: str) -> None:
+    """Codex prints a rounded 'tokens used' total to stderr on every call, win or
+    lose the timeout race. Nothing before this read it, so there was no record
+    of what the daily brief actually spends. Best-effort: a log miss must never
+    break the call it is logging."""
+    m = _TOKENS_USED_RE.search(stderr or "")
+    if not m:
+        return
+    try:
+        USAGE_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with USAGE_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "ts": datetime.now(config.BJT).isoformat(timespec="seconds"),
+                "call": call,
+                "provider": "codex",
+                "tokens": int(m.group(1).replace(",", "")),
+            }, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def codex_call(messages: list[dict], model: str | None, timeout: int = 150, *, call: str = "unlabeled") -> str:
     """Non-interactive Codex CLI call; returns the last assistant message."""
     prompt = "\n\n".join(m["content"] for m in messages)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
@@ -68,7 +92,8 @@ def codex_call(messages: list[dict], model: str | None, timeout: int = 150) -> s
     # Empty scratch cwd (no project context) and a closed stdin: with an inherited pipe Codex waits forever.
     with tempfile.TemporaryDirectory(prefix="morning-codex-") as scratch:
         try:
-            subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, cwd=scratch, check=False, stdin=subprocess.DEVNULL)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, cwd=scratch, check=False, stdin=subprocess.DEVNULL)
+            _log_codex_usage(call, result.stderr)
             return out_path.read_text(encoding="utf-8").strip() if out_path.exists() else ""
         except subprocess.TimeoutExpired:
             return ""
@@ -88,13 +113,13 @@ class LLM:
         self.calls: dict[str, int] = {"deepseek": 0, "codex": 0}
         self.errors: list[str] = []
 
-    def complete(self, messages: list[dict], timeout: int = 240) -> tuple[str, str]:
+    def complete(self, messages: list[dict], timeout: int = 240, *, call: str = "unlabeled") -> tuple[str, str]:
         for name in self.providers:
             if name in self.dead:
                 continue
             try:
                 self.calls[name] += 1
-                text = deepseek_call(messages, self.deepseek_model, self.key, timeout=min(timeout, 90)) if name == "deepseek" else codex_call(messages, self.codex_model, timeout=timeout)
+                text = deepseek_call(messages, self.deepseek_model, self.key, timeout=min(timeout, 90)) if name == "deepseek" else codex_call(messages, self.codex_model, timeout=timeout, call=call)
                 if text:
                     return text, name
                 self.errors.append(f"{name}: empty response")
@@ -150,7 +175,7 @@ def annotate_stocks(stocks: list[dict], date: str, llm: LLM | None, batch: int =
     todo = [s for s in stocks if s["stats"] and (cache.get(s["id"], {}).get("as_of") != s["stats"].get("as_of") or not cache.get(s["id"], {}).get("note"))]
     for i in range(0, len(todo), batch):
         chunk = todo[i : i + batch]
-        text, provider = llm.complete(batch_prompt(chunk))
+        text, provider = llm.complete(batch_prompt(chunk), call="stock_note")
         answers = extract_json(text) if text else {}
         for s in chunk:
             note = sanitize_note(str(answers.get(s["id"], "")))
@@ -181,7 +206,7 @@ def macro_fallback(macros: dict[str, dict], date: str, llm: LLM | None) -> tuple
         {"role": "system", "content": "你是宏观 K 线日报的撰稿人，只基于给出的日线统计写作，不引用任何外部消息。对每个资产输出四项：位置（价格在区间和均线的位置）、结构（趋势强弱与方向）、赔率（是否形成，一句话）、综合结论（一句话）。每项不超过 45 个字，不给买卖建议。另外给一句不超过 60 字的跨资产今日结论，以「等待」「偏进攻」「偏防守」之一开头。只输出 JSON：{\"conclusion\": \"...\", \"assets\": {key: {\"位置\":..,\"结构\":..,\"赔率\":..,\"综合结论\":..}}}，不要其它文字。"},
         {"role": "user", "content": "字段含义：chg 为收益率百分比，vs_ema 为相对均线百分比，pos20 为 20 日区间位置百分位，vol_ratio 为 5 日/20 日量比。\n" + json.dumps(payload, ensure_ascii=False)},
     ]
-    text, provider = llm.complete(messages, timeout=240)
+    text, provider = llm.complete(messages, timeout=240, call="macro_fallback")
     data = extract_json(text) if text else {}
     assets = []
     for key, entry in macros.items():
@@ -228,7 +253,7 @@ def condense_macros(macros: dict[str, dict], analysis_by_key: dict[str, dict], o
         {"role": "system", "content": "你是 Park 的 K 线日报编辑。对每个资产只写一段 90–150 字的中文，先给三个标签再给理由：位置（高位/中位/低位）、状态（趋势/震荡）、倾向（偏多/偏空/观望），并说明日线、4 小时、30 分钟三个周期是否一致、关键位在哪。只基于给出的上游分析与统计，不引用外部消息，不给具体点位建议。只输出 JSON：{key: {\"位置\":..,\"状态\":..,\"倾向\":..,\"段落\":..}}，不要其它文字。"},
         {"role": "user", "content": "统计字段含义：chg 为收益率百分比，vs_ema 为相对均线百分比，pos20 为 20 根 K 线区间位置百分位，vol_ratio 为 5/20 量比。\n" + json.dumps(payload, ensure_ascii=False)},
     ]
-    text, provider = llm.complete(messages, timeout=240)
+    text, provider = llm.complete(messages, timeout=240, call="macro_condense")
     data = extract_json(text) if text else {}
     items = {}
     for key in payload:
