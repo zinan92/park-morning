@@ -6,7 +6,7 @@
 
 Park 每天早上真正会读的那一页：三份日报合成一页 HTML，一条飞书，读者只有一个入口。
 
-## 现在在哪里（2026-09-10）
+## 现在在哪里（2026-09-15）
 
 - 代码从 `park-ai-intel/scripts/build-morning.py`（1037 行单文件）搬到本仓，拆成
   `morning/` 七个模块。搬迁前后用同一天的输入构建，产物逐字节相同（685,017 字节）。
@@ -37,9 +37,27 @@ Park 每天早上真正会读的那一页：三份日报合成一页 HTML，一�
   每只一张 150px 交互图。页面从 700KB 涨到 1.4MB（内嵌 91 只个股的 80 根日线 + SVG 占位）。
   上游今日结论连续三次是占位句：请求构造器读错层级 + Codex 默认推理档超时，equity-research PR #1070 修掉。
 
+- 2026-09-15 排查 Park 反馈「怎么回事」：追出两个独立事故。① AI 日报（Codex CLI
+  gpt-6-astra 模型不兼容）09-11 已修（当天补发）。② K 线日报连续三天 fallback，
+  根因是 `~/Library/Caches/ms-playwright` 整个目录在 09-14 被清空（非本机磁盘占用
+  问题，42% 使用率；疑似同机其它 Claude 会话的浏览器自动化工具重置了共享缓存），
+  chromium_headless_shell 二进制丢失。`python3 -m playwright install chromium`
+  重装后验证：09-15 报告 `analysis_status=ready`、`thesis_status=model_generated_unreviewed`，
+  fallback 结束。**代价发现**：这三天的重试没有跳过已经成功的 LLM 分析阶段——
+  chromium 只挡在最后的截图/交付步骤，但每次 kickstart 重跑仍对 19 个资产整套
+  重新调用一遍分析+论点，且 equity-research 的 Codex 调用每次都是全新 ephemeral
+  session（无跨调用缓存），于是 09-14 一天 139 次 Codex 调用烧了 1437 万 token，
+  是正常日子（09-11 前）的十几倍。equity-research 侧「分析已就绪就跳过重算」的
+  幂等性是否值得做，留给下次讨论，不在本仓库范围内直接改。
+  另外发现 `ops/token_usage.py` 上次会话写完忘记提交，已补 commit。
+
 ## 下一步
 
-1. 连续 30 期三栏全绿，零人工介入。当前连续 2 期，两期都有人工介入（09-08 重跑、09-09 补种子）。
+1. 连续 30 期三栏全绿，零人工介入。计数器多次被打断，当前重新从 0 起算：
+   09-11 AI 日报因 Codex CLI 客户端过期（后端把默认模型换成本地 CLI 不认的
+   `gpt-6-astra`）整条链失败，人工升级 CLI 后补发；09-12～09-14 连续三天 K 线
+   日报因 Playwright 的 chromium 渲染二进制从本机缓存丢失而 fallback（09-14
+   已修，见下）。
    「三栏绿」不等于「数据新」：新鲜度要看 kline.db 最新柱，见 runbook。
 2. 每期 HTML 约 1.4MB（v5 起）提交进站点仓库，一年约 500MB。到 30 期时决定是否改为
    Cloudflare Pages 独立托管，只把 `status/*.json` 留在 git 里。
