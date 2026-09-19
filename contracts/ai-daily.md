@@ -4,7 +4,7 @@
 |---|---|
 | 产出方 | [zinan92/daily-newsletter](https://github.com/zinan92/daily-newsletter) |
 | 本机检出 | `~/work/input-to-park`，在 `main` 上（2026-09-09 起；此前跑在 `codex/daily-push-debug-fixes`，其修复已并入 main，PR #15） |
-| 定时 | launchd `com.wendy.parkio-push` 08:30（`push-digest.sh`，只生成不推送） |
+| 定时 | launchd `com.wendy.parkio-push` 07:00（2026-09-19 由 08:30 提前，批次变大后 30 分钟不够；`push-digest.sh`，只生成不推送） |
 | 交付路径 | `~/park-hands/006_ai daily newsletter/YY-MM-DD.md` |
 | 截止时间 | 09:00（晨报第一次运行）。实测落盘时间 08:37–08:50 |
 
