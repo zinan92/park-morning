@@ -263,7 +263,7 @@ svg.k{{display:block}}svg.k path.w{{stroke:var(--wick);stroke-width:.8;fill:none
   <section class="part" id="finance"><h2>财经日报<small>{fin_count}</small></h2>{status_line(fin)}{f'<div class="prose">{fin.html}</div>' if fin.html else unavailable(fin)}</section>
   <section class="part" id="kline"><h2>K 线日报<small>{len(macro_html)} 宏观 · {len(stocks)} 个股</small></h2>{status_line(kl)}{kline_body}</section>
 </div>
-<div class="foot">上游各自生成：AI 日报 08:30 · 财经日报 08:00 · K 线日报 08:20 · 晨报合成 09:00 / 09:40。个股的一句描述按日线统计生成，只描述结构，不构成任何建议。图表：TradingView Lightweight Charts，可拖动缩放。</div>
+<div class="foot">上游各自生成：AI 日报 07:00 · 财经日报 08:00 · K 线日报 08:20 · 晨报合成 09:00 / 09:40。个股的一句描述按日线统计生成，只描述结构，不构成任何建议。图表：TradingView Lightweight Charts，可拖动缩放。</div>
 <script id="kdata" type="application/json">{chart_json}</script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" integrity="sha384-q1KYLSKHgBnW5tWYGGR8+6YV4/iPy31dILoF2I1OD7XiVUvHEp/TaxIQVmB0j3R2" crossorigin="anonymous"></script>
 <script>
