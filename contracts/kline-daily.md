@@ -4,7 +4,7 @@
 |---|---|
 | 产出方 | [zinan92/equity-research](https://github.com/zinan92/equity-research) |
 | 运行时检出 | `~/Library/Application Support/ParkKlineDaily/app`（不在 `~/work`） |
-| 定时 | launchd `com.park.market-regime.kline-newsletter` 08:20，带 `--no-feishu` |
+| 定时 | launchd `com.park.market-regime.kline-newsletter` 08:20，带 `--no-feishu --no-snapshots` |
 | 交付路径 | `~/park-hands/007_kline daily newsletter/YYYY-MM-DD-kline-daily-newsletter.md`；重跑不覆盖，写 `…-newsletter-<hash>.md`，晨报取当天最新的一份 |
 | 失败时写 | 同目录 `…-kline-daily-newsletter-unavailable.md`，含运行阶段与失败原因 |
 | 截止时间 | 09:00 |
@@ -20,7 +20,7 @@
 ## 晨报剥掉什么
 
 - 整节：`## 数据边界`、`## 来源与状态`
-- 每个资产块里的 `标的：`、`观察时点：`、PNG 引用
+- 每个资产块里的 `标的：`、`观察时点：`（`--no-snapshots` 之后上游不再产出 PNG）
 - `**市场含义**`：每天逐字重复，不是当日信息
 - `**赔率**：赔率尚未形成`：16 个资产全都一样时没有信息量
 
@@ -60,31 +60,24 @@ equity-research PR #1070 修掉：① thesis 请求构造器读 `analysis["outpu
 360 秒。现在所有 Codex 调用带 `model_reasoning_effort="low"`（`PARK_KLINE_CODEX_REASONING_EFFORT`
 可覆盖），实测 83 秒并通过校验。再看到占位句，先看 md 末尾「模型失败披露」那一行。
 
-## 盘中数据（另一条源）
+## 只看日线（2026-09-22 起）
 
-**日线一律来自 kline.db**（08:15 写入，永远是最新的）；4 小时、30 分钟来自 Human K-line Review：
-`http://127.0.0.1:8932/api/overview`，launchd `com.park.human-kline-review`。
-这个服务只在被要求时才重新拉数据：2026-09-10 早上它的 bundle 还是前一天 02:00Z 的，
-所有盘中图落后一天。晨报从 v5 起先请求 `?refresh=true`（最多等 8 分钟），超时再读旧 bundle，
-每天缓存一次为 `{date}-overview.json`。拿不到时只显示日线，不放占位。
+Park：「每一只股票的格式都一样，只看日线，不要整得这么复杂了。」
 
-### 各资产实际能拿到哪些周期（2026-09-08 实测）
+晨报对宏观资产和个股使用同一个卡片：名称、价格、涨跌、一张日线图、一段描述，
+一行三个。宏观多三个标签（位置/状态/倾向），其余完全一致。
 
-| 资产 | 日线 | 4 小时 | 30 分钟 |
-|---|---|---|---|
-| VIX、BTC、ETH、HYPE | 有 | 有 | 有 |
-| GOLD、SILVER、WTI | 有 | 有 | 有 |
-| DXY、SPX、NDX、SCHD | 有 | **没有** | 有 |
-| N225、KOSPI | 有 | 没有 | 没有 |
-| SHCOMP、STAR50、DIVIDEND | 有（来自 kline.db） | 没有 | 没有 |
+因此这些东西已经从晨报移除，不要再加回来：
 
-四个美股 ETF 没有 4 小时不是故障：datafeed 返回
-`timeframe_not_supported · Source yahoo_finance does not serve SPY at 4h`，
-是数据源本身不提供。A 股与日韩指数没有盘中源。这些情况下晨报只显示有的周期。
+- Human K-line Review（8932）的盘中总览、`{date}-overview.json` 缓存、`?refresh=true` 预热
+- 4 小时 / 30 分钟图槽与 `TF_ORDER` / `TF_LABELS`
+- 盘中滞后判断 `series_lag_days` / `STALE_AFTER_DAYS`
 
-### 不要用上游的 stale 标记判断新鲜度
+`condense_macros` 的提示词也已改为只看日线；再改动时别让它重新提到盘中周期。
 
-Human K-line Review 按墙上时钟判断 `status: stale`。美国假日后的早上，
-盘中序列合法地停在上一个交易日，会被它标成 stale。晨报改为把盘中序列的
-最后一根与**同一资产自己的日线**比较，落后超过 `market.STALE_AFTER_DAYS` 天才提示。
-2026-09-07 是美国劳动节，当天早上四个商品的 4 小时停在 09-04，属于正常。
+## 图表快照已关闭
+
+上游原本用无头浏览器把每个资产渲染成 PNG 存进 md。这一步是 2026-09-12、09-13、
+09-14、09-21、09-22 五次 `-unavailable` 的唯一原因（`Page.goto: Timeout 30000ms`），
+而晨报本来就把 PNG 引用剥掉、用 lightweight-charts 自己画。2026-09-22 起 launchd 带
+`--no-snapshots`：失败模式消失，读者看到的东西不变，代价是 Obsidian 里的 md 只有文字。

@@ -20,16 +20,3 @@ def test_svg_candles_draws_requested_bars(candles):
     assert 'class="k"' in svg
     assert "无数据" in market.svg_candles([])
 
-
-def test_series_lag_is_measured_against_the_asset_own_daily_bar():
-    """A holiday weekend must not look like a broken feed."""
-    # Tuesday after Labor Day: 4h ends Friday, daily has the Sunday session.
-    assert market.series_lag_days("2026-09-04T20:00", "2026-09-07") == 3
-    assert 3 <= market.STALE_AFTER_DAYS
-    # A series that genuinely stopped two weeks ago.
-    assert market.series_lag_days("2026-08-24T17:00", "2026-09-07") == 14
-    assert 14 > market.STALE_AFTER_DAYS
-    # Same session, and unusable inputs.
-    assert market.series_lag_days("2026-09-07T14:00", "2026-09-07") == 0
-    assert market.series_lag_days("", "2026-09-07") is None
-    assert market.series_lag_days("2026-09-07", "") is None

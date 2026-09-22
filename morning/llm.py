@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 
 from . import config, market
-from .config import MACRO_ORDER, TF_LABELS
+from .config import MACRO_ORDER
 
 
 FORBIDDEN = ("买", "卖", "建议", "推荐", "加仓", "减仓", "抄底", "止损", "目标价")
@@ -231,7 +231,7 @@ def fill_missing_notes(stocks: list[dict], notes: dict[str, str]) -> tuple[dict[
     return out, fallback
 
 
-def condense_macros(macros: dict[str, dict], analysis_by_key: dict[str, dict], overview: dict, date: str, llm: LLM | None) -> tuple[dict[str, dict], str]:
+def condense_macros(macros: dict[str, dict], analysis_by_key: dict[str, dict], date: str, llm: LLM | None) -> tuple[dict[str, dict], str]:
     """One paragraph per macro asset: position / regime / lean + reasoning, from the upstream analysis and 1d/4h/30m stats."""
     cache_path = config.CACHE_DIR / f"{date}-macro-condensed.json"
     if cache_path.exists():
@@ -247,10 +247,10 @@ def condense_macros(macros: dict[str, dict], analysis_by_key: dict[str, dict], o
         payload[key] = {
             "name": entry["name"],
             "upstream": (analysis_by_key.get(key) or {}).get("fields", {}),
-            "stats": {TF_LABELS[tf]: stats_facts(st) for tf, st in market.tf_stats(overview, key).items()} or {"日线": stats_facts(entry["stats"])},
+            "stats": {"日线": stats_facts(entry["stats"])},
         }
     messages = [
-        {"role": "system", "content": "你是 Park 的 K 线日报编辑。对每个资产只写一段 90–150 字的中文，先给三个标签再给理由：位置（高位/中位/低位）、状态（趋势/震荡）、倾向（偏多/偏空/观望），并说明日线、4 小时、30 分钟三个周期是否一致、关键位在哪。只基于给出的上游分析与统计，不引用外部消息，不给具体点位建议。只输出 JSON：{key: {\"位置\":..,\"状态\":..,\"倾向\":..,\"段落\":..}}，不要其它文字。"},
+        {"role": "system", "content": "你是 Park 的 K 线日报编辑。对每个资产只写一段 90–150 字的中文，先给三个标签再给理由：位置（高位/中位/低位）、状态（趋势/震荡）、倾向（偏多/偏空/观望），并说明日线的结构与关键位在哪。只看日线，不要提及 4 小时、30 分钟或任何盘中周期。只基于给出的上游分析与统计，不引用外部消息，不给具体点位建议。只输出 JSON：{key: {\"位置\":..,\"状态\":..,\"倾向\":..,\"段落\":..}}，不要其它文字。"},
         {"role": "user", "content": "统计字段含义：chg 为收益率百分比，vs_ema 为相对均线百分比，pos20 为 20 根 K 线区间位置百分位，vol_ratio 为 5/20 量比。\n" + json.dumps(payload, ensure_ascii=False)},
     ]
     text, provider = llm.complete(messages, timeout=240, call="macro_condense")

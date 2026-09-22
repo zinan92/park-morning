@@ -6,12 +6,13 @@ import json
 from datetime import datetime
 
 from . import config
-from .config import BJT, KLINE_SUMMARY_ORDER, MACRO_ORDER, TF_LABELS, TF_ORDER
-from .market import STALE_AFTER_DAYS, candles_to_bars, series_lag_days, should_expand, svg_candles
+from .config import BJT, KLINE_SUMMARY_ORDER, MACRO_ORDER
+from .market import candles_to_bars, should_expand, svg_candles
 from .sources import Section
 from .text import md_to_html
 
 MARKET_LABELS = {"CN": "A 股", "HK": "港股", "US": "美股", "KR": "韩股"}
+CHART_HEIGHT = 170
 MARKET_ORDER = ["CN", "HK", "US", "KR"]
 STOCK_BARS = 80
 
@@ -52,35 +53,32 @@ def chart_box(key: str, tf: str, candles: list[dict] | None, height: int, captio
     return f'<figure class="kc">{cap}<div class="chart" data-key="{html.escape(key)}" data-tf="{tf}" style="height:{height}px">{placeholder}</div></figure>'
 
 
-def macro_bars(key: str, entry: dict | None, overview_asset: dict | None) -> dict[str, list]:
-    """Daily from kline.db (written 08:15, always current); intraday from the review server."""
-    out: dict[str, list] = {}
-    if entry and entry.get("candles"):
-        out["daily"] = candles_to_bars(entry["candles"])
-    tfs = (overview_asset or {}).get("timeframes", {})
-    for tf in ("four_hour", "thirty_minute"):
-        info = tfs.get(tf)
-        if info and info.get("bars"):
-            out[tf] = info["bars"]
-    if "daily" not in out and (tfs.get("daily") or {}).get("bars"):
-        out["daily"] = tfs["daily"]["bars"]
-    return out
+def render_asset(key: str, name: str, symbol: str, stats: dict, candles: list[dict],
+                 body: str, note: str, *, tags: str = "", hot: bool = False, anchor: str = "") -> str:
+    """One card, one daily chart. Macro assets and stocks look identical.
+
+    2026-09-22, Park: 「每一只股票的格式都一样，只看日线」. Before this, macro assets
+    carried two or three charts (daily / 4h / 30m) at 230px while stocks got one
+    at 150px, which made the section read as two different products.
+    """
+    sym = f'<small>{html.escape(symbol)}</small>' if symbol else ""
+    return (
+        f'<article class="asset{" hot" if hot else ""}" id="{html.escape(anchor or key)}">'
+        f'<header><span class="sym">{html.escape(name)}{sym}</span>'
+        f'<span class="px">{fmt_px(stats.get("close"))}</span>'
+        f'<span class="chg {cls_pct(stats.get("chg1d"))}">{fmt_pct(stats.get("chg1d"))}</span></header>'
+        f'{f"<div class=tags>{tags}</div>" if tags else ""}'
+        f'{chart_box(key, "daily", candles, CHART_HEIGHT)}'
+        f'<p class="l2">{body or "<i>无描述</i>"}</p>'
+        f'{f'<div class="park"><span>Park</span><div>{md_to_html(note)}</div></div>' if note else ""}'
+        '</article>'
+    )
 
 
-def render_macro(key: str, entry: dict | None, analysis: dict | None, note: str, overview_asset: dict | None, condensed: dict | None) -> tuple[str, dict[str, list]]:
-    name = (overview_asset or {}).get("name") or (analysis["name"] if analysis else (entry["name"] if entry else key))
+def render_macro(key: str, entry: dict | None, analysis: dict | None, note: str, condensed: dict | None) -> tuple[str, dict[str, list]]:
+    name = (analysis["name"] if analysis else (entry["name"] if entry else key))
     stats = entry["stats"] if entry else {}
-    bars = macro_bars(key, entry, overview_asset)
-    reference = stats.get("as_of") or (bars.get("daily") or [[""]])[-1][0]
-    charts = []
-    for tf in TF_ORDER:
-        rows = bars.get(tf)
-        if not rows:
-            continue
-        as_of = str(rows[-1][0])[:16].replace("T", " ")
-        lag = series_lag_days(as_of, reference) if tf != "daily" else None
-        stale = f"（落后 {lag} 天）" if lag is not None and lag > STALE_AFTER_DAYS else ""
-        charts.append(chart_box(key, tf, entry["candles"] if (entry and tf == "daily") else None, 230, TF_LABELS[tf], as_of + stale))
+    candles = (entry or {}).get("candles") or []
     tags = ""
     body = ""
     if condensed:
@@ -88,25 +86,14 @@ def render_macro(key: str, entry: dict | None, analysis: dict | None, note: str,
         body = html.escape(condensed.get("段落", ""))
     elif analysis and analysis.get("fields", {}).get("综合结论"):
         body = html.escape(analysis["fields"]["综合结论"])
-    park = f'<div class="park"><span>Park</span><div>{md_to_html(note)}</div></div>' if note else ""
-    article = (
-        f'<article class="macro" id="m-{html.escape(key)}">'
-        f'<header><h4>{html.escape(name)}</h4><span class="px">{fmt_px(stats.get("close"))}</span><span class="chg {cls_pct(stats.get("chg1d"))}">{fmt_pct(stats.get("chg1d"))}</span><span class="tags">{tags}</span></header>'
-        f'<div class="charts n{len(charts)}">{"".join(charts)}</div>'
-        f'{f"<p class=para>{body}</p>" if body else ""}{park}</article>'
-    )
-    return article, bars
+    article = render_asset(key, name, "", stats, candles, body, note, tags=tags, anchor=f"m-{key}")
+    return article, ({"daily": candles_to_bars(candles)} if candles else {})
 
 
 def render_stock(s: dict, note: str, park_note: str, expanded: bool = False) -> str:
-    st = s["stats"]
-    park = f'<div class="park"><span>Park</span><div>{md_to_html(park_note)}</div></div>' if park_note else ""
-    return (
-        f'<article class="stock{" hot" if expanded else ""}" id="s-{html.escape(s["id"])}">'
-        f'<header><span class="sym">{html.escape(s["name"])}<small>{html.escape(s["symbol"])}</small></span>'
-        f'<span class="px">{fmt_px(st.get("close"))}</span><span class="chg {cls_pct(st.get("chg1d"))}">{fmt_pct(st.get("chg1d"))}</span></header>'
-        f'{chart_box(s["id"], "daily", s["candles"], 150)}'
-        f'<p class="l2">{html.escape(note) if note else "<i>无描述</i>"}</p>{park}</article>'
+    return render_asset(
+        s["id"], s["name"], s["symbol"], s["stats"], s["candles"],
+        html.escape(note) if note else "", park_note, hot=expanded, anchor=f's-{s["id"]}',
     )
 
 
@@ -127,8 +114,7 @@ def group_stocks(stocks: list[dict], macro_names: dict) -> list[tuple[str, list[
     return out
 
 
-def render_page(date: str, ai: Section, fin: Section, kl: Section, kline: dict, macros: dict, stocks: list[dict], notes: dict, ai_notes: dict, macro_names: dict, overview: dict | None = None, condensed: dict | None = None) -> str:
-    overview = overview or {}
+def render_page(date: str, ai: Section, fin: Section, kl: Section, kline: dict, macros: dict, stocks: list[dict], notes: dict, ai_notes: dict, macro_names: dict, condensed: dict | None = None) -> str:
     condensed = condensed or {}
     payload: dict[str, dict[str, list]] = {}
 
@@ -148,7 +134,7 @@ def render_page(date: str, ai: Section, fin: Section, kl: Section, kline: dict, 
         if not entry and not analysis:
             continue
         note = note_for(notes, key, entry["symbol"] if entry else "", entry["name"] if entry else "", analysis["ticker"] if analysis else "", analysis["name"] if analysis else "")
-        article, bars = render_macro(key, entry, analysis, note, overview.get("assets", {}).get(key), condensed.get(key))
+        article, bars = render_macro(key, entry, analysis, note, condensed.get(key))
         macro_html.append(article)
         if bars:
             payload[key] = bars
@@ -188,9 +174,9 @@ def render_page(date: str, ai: Section, fin: Section, kl: Section, kline: dict, 
     park_overall = f'<div class="park big"><span>Park 今日判断</span><div>{md_to_html(overall)}</div></div>' if overall else ""
     kline_body = (
         kline_top + park_overall
-        + f'<h3 class="sh2" id="macros">宏观资产 <small>{len(macro_html)} · 日线来自 kline.db，4 小时 / 30 分钟来自盘中源，没有的周期不画</small></h3><div class="macros">{"".join(macro_html)}</div>'
+        + f'<h3 class="sh2" id="macros">宏观资产 <small>{len(macro_html)} · 日线</small></h3><div class="macros">{"".join(macro_html)}</div>'
         + (f'<h3 class="sh2">美国国债</h3><div class="tres">{treasury_html}</div>' if treasury_html else "")
-        + f'<h3 class="sh2" id="stocks">个股 <small>{len(stocks)} · 先按市场，再按赛道 · 涨跌 ≥3% 或 Park 写过的加亮（{hot}）</small></h3>{"".join(market_html)}'
+        + f'<h3 class="sh2" id="stocks">个股 <small>{len(stocks)} · 日线 · 先按市场，再按赛道 · 涨跌 ≥3% 或 Park 写过的加亮（{hot}）</small></h3>{"".join(market_html)}'
     )
 
     conclusion = kline.get("conclusion") or ("K 线日报今日不可用" if kl.status not in ("ok", "fallback") else "")
@@ -223,7 +209,7 @@ a{{color:inherit;text-decoration:none}}
 .digest{{max-width:1180px;margin:0 auto;padding:10px 24px 0;display:grid;gap:4px;font-size:13.5px;color:var(--ink2)}}
 .digest a{{display:flex;gap:10px;align-items:baseline}}.digest a span{{flex:none;width:40px;font:500 10.5px/1.8 "IBM Plex Mono",monospace;letter-spacing:.08em;color:var(--acc)}}
 .wrap{{max-width:1180px;margin:0 auto;padding:0 24px 80px}}
-.part,h3.sh2,.macro,.stock{{scroll-margin-top:64px}}
+.part,h3.sh2,.asset{{scroll-margin-top:64px}}
 .part{{padding:30px 0 10px;border-top:1px solid var(--line);margin-top:26px}}.part:first-of-type{{border-top:0;margin-top:0}}
 .part>h2{{font-family:"Noto Serif SC",serif;font-weight:500;font-size:19px;margin:0 0 16px;display:flex;align-items:baseline;gap:12px}}
 .part>h2 small{{font:400 11px/1 "IBM Plex Mono",monospace;color:var(--mute);letter-spacing:.06em}}
@@ -237,24 +223,22 @@ a{{color:inherit;text-decoration:none}}
 .park{{margin-top:8px;padding:8px 12px;border-left:2px solid var(--acc);background:#f7f3ec;font-size:13px}}.park span{{display:block;font:500 10.5px/1.8 "IBM Plex Mono",monospace;letter-spacing:.08em;color:var(--acc)}}.park p{{margin:2px 0}}.park.big{{margin:14px 0;max-width:78ch}}
 h3.sh2{{font-family:"Noto Serif SC",serif;font-weight:500;font-size:16px;margin:34px 0 12px;color:var(--ink)}}h3.sh2 small{{font:400 11px/1 "IBM Plex Mono",monospace;color:var(--mute);margin-left:10px;letter-spacing:.04em}}
 h4.sh{{font-family:"Noto Serif SC",serif;font-weight:500;font-size:15px;margin:28px 0 8px;color:var(--ink2);padding-bottom:6px;border-bottom:1px solid var(--line)}}h4.sh small{{font:400 11px/1 "IBM Plex Mono",monospace;color:var(--mute);margin-left:8px}}
-.macros{{display:grid;gap:16px}}.macro{{background:var(--col);border:1px solid var(--line);padding:14px 16px}}
-.macro header{{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}}.macro h4{{margin:0;font-weight:500;font-size:15px}}
+.macros{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}}
 .px{{font:400 13px/1 "IBM Plex Mono",monospace;color:var(--ink2)}}.chg{{font:400 12.5px/1 "IBM Plex Mono",monospace;color:var(--mute)}}.chg.up{{color:var(--up)}}.chg.dn{{color:var(--dn)}}
-.tags{{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}}.tg{{font:400 11px/1 "IBM Plex Mono",monospace;padding:4px 7px;border:1px solid var(--line);border-radius:2px;color:var(--ink2)}}.tg.lean{{border-color:var(--acc);color:var(--acc)}}
-.charts{{display:grid;gap:12px;margin:12px 0 8px}}.charts.n3{{grid-template-columns:repeat(3,minmax(0,1fr))}}.charts.n2{{grid-template-columns:repeat(2,minmax(0,1fr))}}.charts.n1{{grid-template-columns:1fr}}
-.kc{{margin:0;min-width:0}}.kc figcaption{{font:400 10.5px/1.6 "IBM Plex Mono",monospace;color:var(--mute);display:flex;justify-content:space-between;gap:8px;letter-spacing:.04em}}
+.tags{{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0 0}}.tg{{font:400 11px/1 "IBM Plex Mono",monospace;padding:4px 7px;border:1px solid var(--line);border-radius:2px;color:var(--ink2)}}.tg.lean{{border-color:var(--acc);color:var(--acc)}}
+.kc{{margin:10px 0 0;min-width:0}}
 .chart{{border:1px solid var(--line2);background:var(--col);position:relative;overflow:hidden}}.chart>svg.k{{position:absolute;inset:0;width:100%;height:100%}}
 .para{{margin:8px 0 0;font-size:14px;line-height:1.75;color:var(--ink2);max-width:90ch}}
 .tres{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}}.tre{{font-size:13px;color:var(--ink2);background:var(--col);border:1px solid var(--line);padding:10px 12px}}.tre b{{display:block;font-weight:500;color:var(--ink);margin-bottom:2px}}.tre p{{margin:2px 0}}.tre p span{{font:400 10px/1.6 "IBM Plex Mono",monospace;color:var(--mute);margin-right:6px}}
 .sector{{margin:12px 0 18px}}.sector h5{{font:500 11px/1.6 "IBM Plex Mono",monospace;letter-spacing:.06em;color:var(--mute);margin:0 0 8px}}.sector h5 small{{margin-left:6px;font-weight:400}}
 .cards{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}}
-.stock{{background:var(--col);border:1px solid var(--line);padding:10px 12px 10px;min-width:0}}.stock.hot{{border-left:2px solid var(--acc)}}
-.stock header{{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}}.stock .sym{{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}}.stock .sym small{{font:400 10.5px/1 "IBM Plex Mono",monospace;color:var(--mute);margin-left:6px}}
-.stock .l2{{font-size:12.5px;color:var(--mute);margin:8px 0 0;line-height:1.6}}.stock .l2 i{{color:var(--line)}}
+.asset{{background:var(--col);border:1px solid var(--line);padding:10px 12px;min-width:0}}.asset.hot{{border-left:2px solid var(--acc)}}
+.asset header{{display:flex;align-items:baseline;gap:8px}}.asset .sym{{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}}.asset .sym small{{font:400 10.5px/1 "IBM Plex Mono",monospace;color:var(--mute);margin-left:6px}}
+.asset .l2{{font-size:12.5px;color:var(--mute);margin:8px 0 0;line-height:1.6}}.asset .l2 i{{color:var(--line)}}
 svg.k{{display:block}}svg.k path.w{{stroke:var(--wick);stroke-width:.8;fill:none}}svg.k path.u{{fill:var(--upf);stroke:var(--up);stroke-width:.7}}svg.k path.d{{fill:var(--dnf);stroke:var(--dn);stroke-width:.7}}
 .foot{{max-width:1180px;margin:0 auto;padding:14px 24px 40px;font-size:11.5px;color:var(--mute);border-top:1px solid var(--line)}}
-@media (max-width:1000px){{.cards{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media (max-width:640px){{.charts.n3,.charts.n2,.tres,.cards{{grid-template-columns:1fr}}.nav .links{{margin-left:0;width:100%}}.wrap,.nav .in,.digest,.foot{{padding-left:14px;padding-right:14px}}}}
+@media (max-width:1000px){{.cards,.macros{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
+@media (max-width:640px){{.tres,.cards,.macros{{grid-template-columns:1fr}}.nav .links{{margin-left:0;width:100%}}.wrap,.nav .in,.digest,.foot{{padding-left:14px;padding-right:14px}}}}
 </style></head><body>
 <div class="nav"><div class="in"><h1>晨报 · {date}</h1><span class="d">生成 {generated}</span><nav class="links"><a href="#ai">AI 日报</a><a href="#finance">财经日报</a><a href="#kline">K 线日报</a><a href="#stocks">个股</a><a class="home" href="/daily/">往期</a></nav></div></div>
 <div class="digest">{digest_html}</div>
@@ -283,7 +267,7 @@ svg.k{{display:block}}svg.k path.w{{stroke:var(--wick);stroke-width:.8;fill:none
     var chart = LW.createChart(el, {{
       height: h, layout: {{ background: {{ type: 'solid', color: 'transparent' }}, textColor: v('--mute', '#8f8f88'), fontSize: 10, fontFamily: 'IBM Plex Mono, monospace', attributionLogo: false }},
       grid: {{ vertLines: {{ visible: false }}, horzLines: {{ color: v('--line2', '#f3f3ee') }} }},
-      rightPriceScale: {{ borderVisible: false }}, timeScale: {{ borderVisible: false, timeVisible: el.dataset.tf !== 'daily', secondsVisible: false }},
+      rightPriceScale: {{ borderVisible: false }}, timeScale: {{ borderVisible: false, timeVisible: false, secondsVisible: false }},
       handleScroll: true, handleScale: true, crosshair: {{ mode: 0, vertLine: {{ color: v('--line', '#ebebe4'), labelBackgroundColor: v('--ink2', '#5b5b56') }}, horzLine: {{ color: v('--line', '#ebebe4'), labelBackgroundColor: v('--ink2', '#5b5b56') }} }}
     }});
     var series = chart.addSeries(LW.CandlestickSeries, {{ upColor: v('--upf', '#e3efe5'), downColor: v('--dnf', '#f5e2dd'), borderUpColor: v('--up', '#4f8a60'), borderDownColor: v('--dn', '#b6614f'), wickUpColor: v('--wick', '#c2c2ba'), wickDownColor: v('--wick', '#c2c2ba'), borderVisible: true }});

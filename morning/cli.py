@@ -73,16 +73,15 @@ def main(argv: list[str] | None = None) -> int:
             kl.reason = f"上游不可用（{kl.reason or '无产出'}）；宏观资产分析由晨报按日线统计自生成（{fallback_provider}）"
     model_notes = llm_mod.annotate_stocks(stocks, date, llm, batch=args.batch)
     ai_notes, fallback_count = llm_mod.fill_missing_notes(stocks, model_notes)
-    overview = {} if args.dry_run else market.load_review_overview(date)
     analysis_by_key = {a["key"]: a for a in kline["assets"] if a.get("key")}
-    condensed, condensed_provider = llm_mod.condense_macros(macros, analysis_by_key, overview, date, llm)
-    page = render.render_page(date, ai, fin, kl, kline, macros, stocks, notes, ai_notes, market.load_macro_names(), overview, condensed)
+    condensed, condensed_provider = llm_mod.condense_macros(macros, analysis_by_key, date, llm)
+    page = render.render_page(date, ai, fin, kl, kline, macros, stocks, notes, ai_notes, market.load_macro_names(), condensed)
 
     status = {
         "date": date,
         "generated_at": datetime.now(BJT).isoformat(timespec="seconds"),
         "sections": {s.key: {"status": s.status, "reason": s.reason, **s.meta} for s in (ai, fin, kl)},
-        "kline": {"macro_assets": len(macros), "stocks": len(stocks), "model_notes": sum(1 for v in model_notes.values() if v), "rule_notes": fallback_count, "park_notes": len(notes), "macro_fallback": fallback_provider, "condensed": len(condensed), "condensed_provider": condensed_provider, "overview_assets": len(overview.get("assets", {}))},
+        "kline": {"macro_assets": len(macros), "stocks": len(stocks), "model_notes": sum(1 for v in model_notes.values() if v), "rule_notes": fallback_count, "park_notes": len(notes), "macro_fallback": fallback_provider, "condensed": len(condensed), "condensed_provider": condensed_provider},
         "healed": healed,
         "llm": {"active": llm.active if llm else "none", "calls": llm.calls if llm else {}, "errors": llm.errors[:10] if llm else []},
     }

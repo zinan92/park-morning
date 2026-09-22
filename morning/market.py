@@ -1,7 +1,7 @@
 """Candles, derived statistics and the mini SVG chart.
 
 Daily bars come from the local kline.db; intraday bars come from the Human
-K-line Review overview endpoint, cached once per day.
+kline.db daily bars.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 
 from . import config
-from .config import CHART_BARS, TF_LABELS, macro_key
+from .config import CHART_BARS, macro_key
 
 try:
     import yaml
@@ -123,65 +123,13 @@ def should_expand(stats: dict, has_note: bool, threshold: float = 3.0) -> bool:
     return has_note or (chg is not None and abs(chg) >= threshold)
 
 
-def fetch_overview(url: str, refresh_timeout: int = 480) -> dict | None:
-    """Ask Human K-line Review to refresh, then read the bundle.
-
-    The review server only re-pulls when asked. On 2026-09-10 its bundle was
-    still the previous morning's (cutoff 09-09 02:00Z) and every intraday chart
-    ran a day behind kline.db. A refresh takes a few minutes; if it times out
-    the plain read is still better than nothing.
-    """
-    for target, timeout in ((url + ("&" if "?" in url else "?") + "refresh=true", refresh_timeout), (url, 90)):
-        try:
-            with urllib.request.urlopen(target, timeout=timeout) as resp:
-                return json.loads(resp.read().decode())
-        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-            sys.stderr.write(f"[overview] {target}: {exc}\n")
-    return None
-
-
 def candles_to_bars(candles: list[dict], limit: int = CHART_BARS) -> list[list]:
     """kline.db candles → the compact [t,o,h,l,c,v] rows the page embeds."""
     return [[c["t"], c["o"], c["h"], c["l"], c["c"], c.get("v") or 0] for c in candles[-limit:]]
 
 
-def load_review_overview(date: str, url: str = config.REVIEW_OVERVIEW_URL) -> dict:
-    """Fetch the 16-asset daily/4h/30m candle bundle once per day and cache it."""
-    config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_path = config.CACHE_DIR / f"{date}-overview.json"
-    if cache_path.exists():
-        return json.loads(cache_path.read_text(encoding="utf-8"))
-    raw = fetch_overview(url)
-    if raw is None:
-        return {}
-    compact = {"cutoff_at": raw.get("cutoff_at"), "assets": {}}
-    for asset in raw.get("assets", []):
-        key = macro_key(asset.get("display_name", ""), asset.get("ticker", ""))
-        if not key:
-            continue
-        tfs = {}
-        for tf in asset.get("timeframes", []):
-            name = tf.get("timeframe")
-            if name not in TF_LABELS:
-                continue
-            bars = [
-                [c["timestamp"], c["open"], c["high"], c["low"], c["close"], c.get("volume") or 0]
-                for c in tf.get("candles", [])[-CHART_BARS:]
-                if c.get("close") is not None
-            ]
-            tfs[name] = {"status": tf.get("status"), "as_of": (tf.get("as_of") or "")[:16].replace("T", " "), "bars": bars}
-        compact["assets"][key] = {"name": asset.get("display_name"), "ticker": asset.get("ticker"), "timeframes": tfs}
-    cache_path.write_text(json.dumps(compact, ensure_ascii=False), encoding="utf-8")
-    return compact
-
-
 def bars_to_candles(bars: list[list]) -> list[dict]:
     return [dict(t=str(b[0])[:10], o=b[1], h=b[2], l=b[3], c=b[4], v=b[5]) for b in bars]
-
-
-def tf_stats(overview: dict, key: str) -> dict[str, dict]:
-    asset = overview.get("assets", {}).get(key, {})
-    return {tf: compute_stats(bars_to_candles(v["bars"])) for tf, v in asset.get("timeframes", {}).items() if v.get("bars")}
 
 
 def build_universe(manifest: list[dict], db: Path) -> tuple[dict[str, dict], list[dict]]:
@@ -205,24 +153,3 @@ def build_universe(manifest: list[dict], db: Path) -> tuple[dict[str, dict], lis
             stocks.append(entry)
     return macros, stocks
 
-def series_lag_days(as_of: str, reference: str) -> int | None:
-    """How many days an intraday series trails the asset's own daily series.
-
-    Wall-clock freshness lies across weekends and holidays: on the Tuesday
-    after Labor Day a US intraday series legitimately ends the previous
-    Friday. Comparing against the same asset's daily bar instead only flags a
-    series that has genuinely stopped updating.
-    """
-    from datetime import date
-
-    def parse(text: str) -> date | None:
-        try:
-            return date.fromisoformat((text or "")[:10])
-        except ValueError:
-            return None
-
-    a, b = parse(as_of), parse(reference)
-    return None if not a or not b else (b - a).days
-
-
-STALE_AFTER_DAYS = 4
