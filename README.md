@@ -1,3 +1,8 @@
+> **已归档（2026-09-27）。** 财经日报停用、K 线日报改为独立推送后，这一页只剩包装 AI 日报一件事，
+> 于是整个仓库归档。AI 日报（zinan92/daily-newsletter）自己推飞书、自己在 09:30 / 11:00 补跑；
+> K 线日报（zinan92/equity-research）自己推飞书。launchd `com.wendy.park-morning` 已停，plist 在
+> `~/Library/LaunchAgents/disabled-20260927/`。park-ai-intel.com/daily/ 的旧期保留，不再更新。
+
 <div align="center">
 
 # park-morning
